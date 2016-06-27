@@ -30,3 +30,7 @@
 /VSRESTSolution/packages
 /VSRESTSolution/VSRESTSolution.VC.VC.opendb
 *.db
+/VSRESTSolution/UnitTestGenInfo/Debug
+/VSRESTSolution/ipch/UNITTESTGENINFO-f7ad03e8
+/VSRESTSolution/geninfo/Debug/geninfo.tlog
+/VSRESTSolution/Debug

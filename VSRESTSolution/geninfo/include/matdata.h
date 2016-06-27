@@ -53,7 +53,7 @@ namespace info {
 		bool get(const size_t ii, const size_t jj, T &val) const {
 			size_t i = ii, j = jj;
 			if (i > j) {
-				T t = i;
+				size_t t = i;
 				i = j;
 				j = t;
 			}
@@ -76,7 +76,7 @@ namespace info {
 			}
 			size_t i = ii, j = jj;
 			if (i > j) {
-				T t = i;
+				size_t t = i;
 				i = j;
 				j = t;
 			}
@@ -211,11 +211,59 @@ namespace info {
 			assert((icol < this->m_ncols) && (icol < v.size()));
 			return (v[icol]);
 		}// row_name
+		bool set_names(const strings_vector *pRowNames = nullptr, const strings_vector *pColNames = nullptr) {
+			const size_t nRows = this->m_nrows;
+			const size_t nCols = this->m_ncols;
+			if ((nRows < 1) || (nCols < 1)) {
+				return (false);
+			}
+			std::shared_ptr<strings_vector> rownames = std::make_shared<strings_vector>();
+			std::shared_ptr<strings_vector> colnames = std::make_shared<strings_vector>();
+			strings_vector *pr = rownames.get();
+			strings_vector *pc = colnames.get();
+			if ((pr == nullptr) || (pc == nullptr)) {
+				return (false);
+			}
+			strings_vector &nr = *pr;
+			nr.resize(nRows);
+			strings_vector &nc = *pc;
+			nc.resize(nCols);
+			if ((pRowNames != nullptr) && (pRowNames->size() >= nRows)) {
+				const strings_vector &v = *pRowNames;
+				for (size_t i = 0; i < nRows; ++i) {
+					string_type s = v[i];
+					nr[i] = s;
+				}// i
+			}
+			else {
+				for (size_t i = 0; i < nRows; ++i) {
+					utility::stringstream_t os;
+					os << U("ind") << (i + 1);
+					nr[i] = os.str();
+				}// i
+			}
+			if ((pColNames != nullptr) && (pColNames->size() >= nCols)) {
+				const strings_vector &v = *pColNames;
+				for (size_t i = 0; i < nCols; ++i) {
+					string_type s = (*pColNames)[i];
+					nc[i] = s;
+				}// i
+			}
+			else {
+				for (size_t i = 0; i < nCols; ++i) {
+					utility::stringstream_t os;
+					os << U("var") << (i + 1);
+					nc[i] = os.str();
+				}// i
+			}
+			this->m_rownames = rownames;
+			this->m_colnames = colnames;
+			return (true);
+		}// setnames
 	public:
 		template <typename X>
-		pplx::task<bool> initAsync(const size_t nRows, const size_t nCols, const X &pxdata,
-			const strings_vector *pRowNames = nullptr, const strings_vector *pColNames = nullptr) {
-			return pplx::task<bool>([this, nRows, nCols, pxdata, pRowNames, pColNames]()->bool {
+		pplx::task<bool> initAsync(const size_t nRows, const size_t nCols, const X &pxdata) {
+			return pplx::task<bool>([this, nRows, nCols, pxdata]()->bool {
 				bool bRet = false;
 				if ((nRows < 1) || (nCols < 1)) {
 					return (bRet);
@@ -251,44 +299,9 @@ namespace info {
 							pf[pos] = (pxdata[pos] - vmin) / delta;
 						}// j
 					}// i
-					std::shared_ptr<strings_vector> rownames(new strings_vector(nRows));
-					std::shared_ptr<strings_vector> colnames(new strings_vector(nCols));
-					strings_vector *pr = rownames.get();
-					strings_vector *pc = colnames.get();
-					if ((pr == nullptr) || (pc == nullptr)) {
-						return (false);
-					}
-					strings_vector &nr = *pr;
-					strings_vector &nc = *pc;
-					if ((pRowNames != nullptr) && (pRowNames->size() >= nRows)) {
-						for (size_t i = 0; i < nRows; ++i) {
-							nr[i] = (*pRowNames)[i];
-						}// i
-					}
-					else {
-						for (size_t i = 0; i < nRows; ++i) {
-							utility::stringstream_t os;
-							os << U("ind") << (i + 1);
-							nr[i] = os.str();
-						}// i
-					}
-					if ((pColNames != nullptr) && (pColNames->size() >= nCols)) {
-						for (size_t i = 0; i < nCols; ++i) {
-							nr[i] = (*pColNames)[i];
-						}// i
-					}
-					else {
-						for (size_t i = 0; i < nCols; ++i) {
-							utility::stringstream_t os;
-							os << U("var") << (i + 1);
-							nc[i] = os.str();
-						}// i
-					}
 					this->m_nrows = nRows;
 					this->m_ncols = nCols;
 					this->m_data = ff;
-					this->m_rownames = rownames;
-					this->m_colnames = colnames;
 					this->m_rowdist.reset();
 					this->m_coldist.reset();
 					bRet = true;
@@ -298,9 +311,8 @@ namespace info {
 			});
 		}// iniAsync
 		template <typename X>
-		bool init(const size_t nRows, const size_t nCols, const X &pxdata,
-			const strings_vector *pRowNames = nullptr, const strings_vector *pColNames = nullptr) {
-			pplx::task<bool> tsk = this->initAsync(nRows, nCols, pxdata, pRowNames, pColNames);
+		bool init(const size_t nRows, const size_t nCols, const X &pxdata) {
+			pplx::task<bool> tsk = this->initAsync(nRows, nCols, pxdata);
 			bool bRet = tsk.get();
 			return (bRet);
 		}// init
@@ -388,22 +400,18 @@ namespace info {
 		}// get_cols_distances_map
 		/////////////////////////////////
 		template< typename X>
-		static pplx::task<MatDataPtr> createAsync(const size_t nRows, const size_t nCols, const X &pxdata,
-			const strings_vector *pRowNames = nullptr, const strings_vector *pColNames = nullptr) {
-			return pplx::task<MatDataPtr>([nRows, nCols, pxdata, pRowNames, pColNames]()->MatDataPtr {
+		static pplx::task<MatDataPtr> createAsync(const size_t nRows, const size_t nCols, const X &pxdata) {
+			return pplx::task<MatDataPtr>([nRows, nCols, pxdata]()->MatDataPtr {
 				MatDataPtr oRet = std::make_shared<MatData>();
 				MatData *pRet = oRet.get();
 				if (pRet != nullptr) {
-					pRet->initAsync(nRows, nCols, pxdata, pRowNames, pColNames).then([oRet](bool b) {
+					pRet->initAsync(nRows, nCols, pxdata).then([oRet](bool b) {
 						if (b) {
 							MatData *px = oRet.get();
 							auto t1 = px->getRowDistAsync();
 							auto t2 = px->getRowDistAsync();
 							auto tr = t1 && t2;
 							tr.wait();
-						}
-						else {
-							oRet.reset();
 						}
 						return (oRet);
 					});
