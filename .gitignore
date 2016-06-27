@@ -27,3 +27,6 @@
 *.exe
 *.out
 *.app
+/VSRESTSolution/packages
+/VSRESTSolution/VSRESTSolution.VC.VC.opendb
+*.db
