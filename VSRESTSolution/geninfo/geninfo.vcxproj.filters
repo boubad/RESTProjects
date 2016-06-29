@@ -30,5 +30,11 @@
     <ClInclude Include="include\matdata.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\matelem.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\treeelem.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

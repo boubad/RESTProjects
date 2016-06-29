@@ -7,15 +7,19 @@
 
 #ifndef GLOBAL_DEFS_H_
 #define GLOBAL_DEFS_H_
+/////////////////////////////
+#include <cpprest/details/basic_types.h>
 //////////////////////////////
 using DATATYPE = int;
-using IDTYPE = unsigned long;
-using INTTYPE = unsigned long;
-using WEIGHTYPE = double;
-using DISTANCETYPE = unsigned long;
-using FLOATTYPE = double;
+using IDTYPE = int;
+using INTTYPE =int;
+using WEIGHTYPE = float;
+using DISTANCETYPE = short;
+using FLOATTYPE = float;
+using CRITERIATYPE = long;
+using INDEXTYPE = size_t;
 //
-using STRINGSTREAM = std::stringstream;
-using STRINGTYPE = std::string;
+using STRINGSTREAM = utility::stringstream_t;
+using STRINGTYPE = utility::string_t;
 /////////////////////////////////
 #endif /* GLOBAL_DEFS_H_ */
