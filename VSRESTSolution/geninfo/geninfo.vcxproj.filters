@@ -33,7 +33,31 @@
     <ClInclude Include="include\matelem.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\treeelem.h">
+    <ClInclude Include="include\gendefs.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\matelem_result.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\distance_map.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\active_object.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cancellable_object.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\indiv.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\treeitem.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\mattree.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\matord.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>

@@ -3,137 +3,63 @@
 #define __MATELEM_H__
 /////////////////////////////
 #include "matdata.h"
+#include "mattree.h"
+#include "matelem_result.h"
 //////////////////////
-#include <atomic>
-#include <queue>
-////////////////////////
 namespace info {
-	////////////////////////////////
-	template <typename DISTANCETYPE, typename CRITERIATYPE>
-	class MatElem {
+	//////////////////////////////////
+	template <typename INDEXTYPE, typename DISTANCETYPE, typename CRITERIATYPE>
+	class MatElem : CancellableObject {
 	public:
+		using index_type = INDEXTYPE;
 		using criteria_type = CRITERIATYPE;
-		using sizets_vector = std::vector<size_t>;
-		using DistanceMapType = DistanceMap<size_t, DISTANCETYPE>;
+		using distance_type = DISTANCETYPE;
+		using sizets_vector = std::vector<index_type>;
+		using distancemap_type = DistanceMap<index_type, distance_type>;
+		using cancellableflag_type = CancellableObject::cancellableflag_type;
+		//
 		using pair_type = std::pair<size_t, size_t>;
 		using pairs_type_vector = std::queue<pair_type>;
-		using index_ptr_type = std::shared_ptr<sizets_vector>;
-		using result_type = std::pair<criteria_type, index_ptr_type>;
-		using task_type = pplx::task<result_type>;
-		using MatElemType = MatElem<DISTANCETYPE, CRITERIATYPE>;
-	public:
-		MatElem(const DistanceMapType *pMap) :m_pdist(pMap), m_cancel(false), m_crit(0) {
-			assert(this->m_pdist != nullptr);
-			pMap->get_indexes(this->m_indexes);
-			pMap->compute_criteria(this->m_indexes, this->m_crit);
-		}// MatElem
-		virtual ~MatElem() {}
-	public:
-		result_type get_result(void) {
-			index_ptr_type oPtr = std::make_shared<sizets_vector>(this->m_indexes);
-			return std::make_pair(this->m_crit, oPtr);
-		}// get_result
-		void cancel(void) {
-			this->m_cancel.store(true);
-		}
-		result_type arrange(void) {
-			bool done = false;
-			while (!done) {
-				if (this->m_cancel.load()) {
-					done = true;
-					break;
-				}
-				pairs_type_vector v;
-				criteria_type bestCrit = this->m_crit;
-				if (!this->find_best_permutations(v, bestCrit)) {
-					done = true;
-					break;
-				}
-				if (v.empty()) {
-					done = true;
-					break;
-				}
-				pair_type p = v.front();
-				v.pop();
-				size_t iFirst = p.first;
-				size_t jFirst = p.second;
-				std::vector<task_type> mtasks;
-				while (!v.empty()) {
-					pair_type px = v.front();
-					size_t i = px.first;
-					size_t j = px.second;
-					v.pop();
-					task_type ts([this, i, j, bestCrit]()->result_type {
-						MatElemType oMat(*this);
-						size_t t = oMat.m_indexes[i];
-						oMat.m_indexes[i] = oMat.m_indexes[j];
-						oMat.m_indexes[j] = t;
-						oMat.m_crit = bestCrit;
-						return (oMat.arrange());
-					});
-					mtasks.push_back(ts);
-				}// not empty
-				sizets_vector &xind = this->m_indexes;
-				size_t t = xind[iFirst];
-				xind[iFirst] = xind[jFirst];
-				xind[jFirst] = t;
-				this->m_crit = bestCrit;
-				for (auto it = mtasks.begin(); it != mtasks.end(); ++it) {
-					task_type ts = *it;
-					result_type pp = ts.get();
-					const criteria_type crit = pp.first;
-					if (crit < this->m_crit) {
-						index_ptr_type oind = pp.second;
-						const sizets_vector *pv = oind.get();
-						if (pv != nullptr) {
-							this->m_crit = crit;
-							this->m_indexes = *pv;
-						}// pv
-					}
-				}// it
-			}// not done
-			return (this->get_result());
-		}// arrange
-		task_type arrangeAsync(void) {
-			return pplx::task<result_type>([this]()->result_type {
-				return (this->arrange());
-			});
-		}// arrangeAsync
-	protected:
-		MatElem(const MatElemType &other) :m_pdist(other.m_pdist), m_cancel(false), m_crit(other.m_crit),
-			m_indexes(other.m_indexes) {}
-		MatElemType & operator=(const MatElemType &other) {
-			if (this != &other) {
-				this->m_pdist = other.m_pdist;
-				this->m_crit = other.m_crit;
-				this->m_indexes = other.m_indexes;
-			}
-			return (*this);
-		}
+		using matelemresult_type = MatElemResult<index_type, criteria_type>;
+		using matelemresult_type_ptr = std::shared_ptr<matelemresult_type>;
+		using task_type = std::future<matelemresult_type_ptr>;
+		using matelem_type = MatElem<index_type, distance_type, criteria_type>;
 	private:
-		bool find_best_permutations(pairs_type_vector &v, criteria_type &bestCrit) const {
-			const sizets_vector &inds = this->m_indexes;
+		distancemap_type *m_pdist;
+		matelemresult_type m_res;
+		bool m_bnotify;
+	protected:
+		MatElem(const matelem_type &other) : CancellableObject(other),m_pdist(other.m_pdist), m_res(other.m_res), m_bnotify(other.m_bnotify) {}
+		matelem_type & operator=(const matelem_type &other) {
+			if (this != &other) {
+				CancellableObject::operator=(other);
+				this->m_pdist = other.m_pdist;
+				this->m_res = other.m_res;
+				this->m_bnotify = other.m_bnotify;
+			}
+		}
+		bool find_best_permutations(pairs_type_vector &v, criteria_type &bestCrit) {
+			sizets_vector inds;
+			this->m_res.indexes(inds);
 			const size_t n = inds.size();
-			const DistanceMapType *pMap = this->m_pdist;
+			const distancemap_type *pMap = this->m_pdist;
 			for (size_t i = 0; i < n; ++i) {
-				if (this->m_cancel.load()) {
+				if (this->is_cancellation_requested()) {
 					return (false);
 				}
 				for (size_t j = 0; j < i; ++j) {
-					if (this->m_cancel.load()) {
+					if (this->is_cancellation_requested()) {
 						return (false);
 					}
-					sizets_vector xind(inds);
-					size_t t = xind[i];
-					xind[i] = xind[j];
-					xind[j] = t;
+					sizets_vector xinds = inds;
+					index_type t = xinds[i];
+					xinds[i] = xinds[j];
+					xinds[j] = t;
 					criteria_type c = 0;
-					pMap->compute_criteria(xind, c);
+					pMap->compute_criteria(xinds, c);
 					if (c < bestCrit) {
-						if (!v.empty()) {
-							while (!v.empty()) {
-								v.pop();
-							}
+						while (!v.empty()) {
+							v.pop();
 						}
 						v.push(std::make_pair(j, i));
 						bestCrit = c;
@@ -143,18 +69,147 @@ namespace info {
 					}
 				}// j
 			}// i
-			if (this->m_cancel.load()) {
+			if (this->is_cancellation_requested()) {
 				return (false);
 			}
 			return (!v.empty());
 		}//find_best_permutations
-	private:
-		const DistanceMapType *m_pdist;
-		std::atomic<bool> m_cancel;
-		criteria_type m_crit;
-		sizets_vector m_indexes;
+	public:
+		template <typename FLOATTYPE, typename STRINGTYPE>
+		MatElem(MatData<index_type, FLOATTYPE, distance_type, STRINGTYPE> *pMat,
+			DispositionType disp = DispositionType::dispRow,
+			cancellableflag_type *pf = nullptr,
+			Backgrounder *pBack = nullptr) :CancellableObject(pf, pBack),m_pdist(nullptr),
+			m_bnotify(false) {
+			assert(pMat != nullptr);
+			assert(pMat->is_valid());
+			if (disp == DispositionType::dispRow) {
+				this->m_pdist = pMat->get_rows_distances_map();
+			}
+			else {
+				this->m_pdist = pMat->get_cols_distances_map();
+			}
+			sizets_vector oinds;
+			this->m_pdist->get_indexes(oinds);
+			criteria_type c = 0;
+			this->m_pdist->compute_criteria(oinds, c);
+			this->m_res.set(c, oinds);
+		}// MatElem
+		MatElem(distancemap_type *pMap, DispositionType disp = DispositionType::dispUnknown,
+			cancellableflag_type *pf = nullptr, Backgrounder *pBack = nullptr) :
+			CancellableObject(pf, pBack),m_pdist(pMap),
+			m_bnotify(false) {
+			assert(pMap != nullptr);
+			assert(pMap->is_valid());
+			sizets_vector oinds;
+			pMap->get_indexes(oinds);
+			criteria_type c = 0;
+			pMap->compute_criteria(oinds, c);
+			this->m_res.set(c, oinds);
+		}// MatElem
+		virtual ~MatElem() {}
+	public:
+		DispositionType disposition(void) const {
+			return (this->m_res.disposition());
+		}
+		criteria_type criteria(void) const {
+			return (this->m_res.criteria());
+		}
+		template <typename XU>
+		void indexes(std::vector<XU> &oInds) const {
+			this->m_res.indexes(oInds);
+		}// indexes
+		template <typename U, typename X>
+		void set(const X &crit, const std::vector<U> &oInds) {
+			this->m_res.set(crit, oInds);
+		}// set
+		bool is_valid(void) const {
+			return (this->m_pdist != nullptr);
+		}
+		matelemresult_type_ptr get_result(void) {
+			return (std::make_shared<matelemresult_type>(this->m_res));
+		}// get_result
+		matelemresult_type_ptr arrange(void) {
+			bool done = false;
+			matelemresult_type oRet;
+			distancemap_type *pMap = this->m_pdist;
+			DispositionType disp = this->disposition();
+			cancellableflag_type *pf = this->get_cancellable_flag();
+			Backgrounder *pb = this->get_backgrounder();
+			criteria_type bestCrit = this->criteria();
+			while (!done) {
+				if (this->is_cancellation_requested()) {
+					done = true;
+					break;
+				}
+				pairs_type_vector v;
+				if (!this->find_best_permutations(v, bestCrit))
+				{
+					done = true;
+					break;
+				}
+				pair_type p = v.front();
+				v.pop();
+				this->m_res.permute(p.first, p.second);
+				this->m_res.criteria(bestCrit);
+				if (!v.empty()) {
+					sizets_vector inds;
+					this->m_res.indexes(inds);
+					matelemresult_type rbest;
+					while (!v.empty()) {
+						pair_type pp = v.front();
+						v.pop();
+						matelem_type xMat(pMap, disp, pf, pb);
+						xMat.m_res.set(bestCrit, inds);
+						xMat.m_res.permute(pp.first, pp.second);
+						matelemresult_type_ptr r = xMat.arrange();
+						matelemresult_type *px = r.get();
+						if (px != nullptr) {
+							rbest += *px;
+						}
+					}// not empty
+					criteria_type cx = rbest.criteria();
+					if ((cx > 0) && (cx < this->criteria())) {
+						this->m_res = rbest;
+					}
+				}// not empty
+			}// not done
+			if (this->is_cancellation_requested()) {
+				return (matelemresult_type_ptr());
+			}
+			return (this->get_result());
+		}// arrange
+
+		static matelemresult_type_ptr st_arrange(const distancemap_type *pMap,
+			DispositionType disp = DispositionType::dispUnknown,
+			cancellableflag_type *pf = nullptr, Backgrounder *pBack = nullptr) {
+			matelem_type oMat(pMap, disp, pf, pBack);
+			return oMat.arrange();
+		}// create
+		template <typename FLOATTYPE, typename STRINGTYPE>
+		static matelemresult_type_ptr st_arrange_matdata(const MatData<index_type, FLOATTYPE, distance_type, STRINGTYPE> *pMat,
+			DispositionType disp = DispositionType::dispRow,
+			cancellableflag_type *pf = nullptr, Backgrounder *pBack = nullptr) {
+			matelem_type oMat(pMat, disp, pf, pBack);
+			return oMat.arrange();
+		}// create
+		template <typename FLOATTYPE, typename STRINGTYPE>
+		static matelemresult_type_ptr st_arrange_hierar(MatData<index_type, FLOATTYPE, distance_type, STRINGTYPE> *pMat,
+			DispositionType disp = DispositionType::dispRow,
+			cancellableflag_type *pf = nullptr, Backgrounder *pBack = nullptr) {
+			MatTree<index_type, FLOATTYPE, distance_type, STRINGTYPE> oTree(pMat, disp, pf,pBack);
+			if (!oTree.aggreg()) {
+				return (matelemresult_type_ptr());
+			}
+			sizets_vector oinds;
+			oTree.get_ids(oinds);
+			matelem_type oMat(pMat, disp, pf, pBack);
+			criteria_type c = oMat.m_res.criteria();
+			oMat.m_res.set(c, oinds);
+			return oMat.arrange();
+		}// create
 	}; // class MatElem
-	//////////////////////////////////
+	   ///////////////////////////////////
 }// namespace info
-/////////////////////////////
+ ///////////////////////////////
 #endif // __MATELEM_H__

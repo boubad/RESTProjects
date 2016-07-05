@@ -137,9 +137,17 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\active_object.h" />
+    <ClInclude Include="include\cancellable_object.h" />
+    <ClInclude Include="include\distance_map.h" />
+    <ClInclude Include="include\gendefs.h" />
+    <ClInclude Include="include\indiv.h" />
     <ClInclude Include="include\matdata.h" />
     <ClInclude Include="include\matelem.h" />
-    <ClInclude Include="include\treeelem.h" />
+    <ClInclude Include="include\matelem_result.h" />
+    <ClInclude Include="include\matord.h" />
+    <ClInclude Include="include\mattree.h" />
+    <ClInclude Include="include\treeitem.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
